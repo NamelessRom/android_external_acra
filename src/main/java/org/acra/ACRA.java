@@ -18,14 +18,20 @@ package org.acra;
 import org.acra.annotation.ReportsCrashes;
 import org.acra.log.ACRALog;
 import org.acra.log.AndroidLogDelegate;
+import org.acra.nameless.Helper;
 
 import android.app.Application;
+import android.content.ContentResolver;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.database.ContentObserver;
+import android.os.Handler;
+import android.os.UserHandle;
 import android.preference.PreferenceManager;
+import android.provider.Settings;
 
 /**
  * Use this class to initialize the crash reporting feature using
@@ -44,6 +50,10 @@ public class ACRA {
     public static final String LOG_TAG = ACRA.class.getSimpleName();
     
     public static ACRALog log = new AndroidLogDelegate();
+
+    // Nameless Additions
+    private static final Handler mHandler = new Handler();
+    private static final Object mLock = new Object();
 
     /**
      * The key of the application default SharedPreference where you can put a
@@ -166,6 +176,12 @@ public class ACRA {
         // NPE in ErrorReporter.disable() because
         // the context could be null at this moment.
         prefs.registerOnSharedPreferenceChangeListener(mPrefListener);
+
+        // Nameless Additions, listen to the System Preference as well
+        if (Helper.isNameless()) {
+            final SettingsObserver settingsObserver = new SettingsObserver(mHandler);
+            settingsObserver.observe();
+        }
     }
 
     /**
@@ -315,5 +331,35 @@ public class ACRA {
     
     public static void setLog(ACRALog log) {
         ACRA.log = log;
+    }
+
+    static class SettingsObserver extends ContentObserver {
+        SettingsObserver(Handler handler) {
+            super(handler);
+        }
+
+        void observe() {
+            // Observe all users' changes
+            final ContentResolver resolver = mApplication.getContentResolver();
+            resolver.registerContentObserver(Settings.Nameless.getUriFor(
+                            Settings.Nameless.ENABLE_ACRA), false, this,
+                    UserHandle.USER_ALL);
+
+            updateSettings();
+        }
+
+        @Override public void onChange(boolean selfChange) {
+            updateSettings();
+        }
+    }
+
+    private static void updateSettings() {
+        final ContentResolver resolver = mApplication.getContentResolver();
+        synchronized (mLock) {
+            final boolean enableAcra = Settings.Nameless.getBoolean(resolver,
+                    Settings.Nameless.ENABLE_ACRA,
+                    true);
+            getErrorReporter().setEnabled(enableAcra);
+        }
     }
 }
