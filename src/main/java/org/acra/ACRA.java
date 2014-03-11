@@ -342,8 +342,7 @@ public class ACRA {
             // Observe all users' changes
             final ContentResolver resolver = mApplication.getContentResolver();
             resolver.registerContentObserver(Settings.Nameless.getUriFor(
-                            Settings.Nameless.ENABLE_ACRA), false, this,
-                    UserHandle.USER_ALL);
+                            Settings.Nameless.ENABLE_ACRA), false, this);
 
             updateSettings();
         }
